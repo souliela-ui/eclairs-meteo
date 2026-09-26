@@ -1,0 +1,44 @@
+name: Éclairs MTG
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # toutes les 10 minutes (GitHub peut décaler de quelques minutes)
+  workflow_dispatch:           # lancement manuel depuis l'onglet Actions
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lightning
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt
+
+      - name: Télécharger les éclairs des 3 dernières heures
+        env:
+          EUMETSAT_CONSUMER_KEY: ${{ secrets.EUMETSAT_CONSUMER_KEY }}
+          EUMETSAT_CONSUMER_SECRET: ${{ secrets.EUMETSAT_CONSUMER_SECRET }}
+        run: python fetch_lightning.py --hours 3 --out lightning.json
+
+      - name: Publier sur la branche « data » (historique non conservé)
+        run: |
+          mkdir -p /tmp/publish && cp lightning.json /tmp/publish/
+          cd /tmp/publish
+          git init -q -b data
+          git add lightning.json
+          git -c user.name="lightning-bot" -c user.email="lightning-bot@users.noreply.github.com" \
+              commit -q -m "Éclairs $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
