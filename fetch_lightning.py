@@ -8,7 +8,11 @@ dernières heures, ne garde que ceux de la zone choisie et publie un petit fichi
     {"generated": "2026-09-26T21:40:00Z",
      "source": "EUMETSAT MTG LI L2 Lightning Flashes",
      "bbox": [lat_min, lon_min, lat_max, lon_max],
-     "flashes": [[heure_unix, latitude, longitude], ...]}
+     "t0": heure_unix_de_référence,
+     "flashes": [[secondes_depuis_t0, latitude, longitude], ...]}
+
+Format compact (décalages en secondes entiers, coordonnées à 3 décimales ≈ 100 m) pour que
+le fichier reste léger même à l'échelle de l'Europe un jour d'orages.
 
 Identifiants EUMETSAT (gratuits) : variables d'environnement EUMETSAT_CONSUMER_KEY et
 EUMETSAT_CONSUMER_SECRET (clés « Consumer key / secret » du compte EUMETSAT).
@@ -27,8 +31,9 @@ import xarray as xr
 
 COLLECTION = "EO:EUM:DAT:0691"          # LI Lightning Flashes - MTG - 0 degree
 EPOCH_2000 = dt.datetime(2000, 1, 1, tzinfo=dt.timezone.utc)
-# France métropolitaine + marges (lat_min, lon_min, lat_max, lon_max)
-DEFAULT_BBOX = (41.0, -5.5, 51.5, 10.0)
+# Europe (lat_min, lon_min, lat_max, lon_max) : des Canaries/Afrique du Nord au Cap Nord,
+# de l'Atlantique à la mer Noire. Zone couverte par l'imageur de foudre de MTG.
+DEFAULT_BBOX = (34.0, -25.0, 72.0, 45.0)
 
 
 def parse_args() -> argparse.Namespace:
@@ -54,7 +59,7 @@ def flashes_from_netcdf(path: str, bbox: tuple[float, float, float, float]) -> l
     valid = np.isfinite(seconds) & np.isfinite(lat) & np.isfinite(lon)
     valid &= (lat >= lat_min) & (lat <= lat_max) & (lon >= lon_min) & (lon <= lon_max)
     unix = seconds[valid] + EPOCH_2000.timestamp()
-    return [[round(float(t), 1), round(float(a), 4), round(float(o), 4)]
+    return [[float(t), round(float(a), 3), round(float(o), 3)]
             for t, a, o in zip(unix, lat[valid], lon[valid])]
 
 
@@ -96,11 +101,13 @@ def main() -> None:
     args = parse_args()
     bbox = tuple(args.bbox)
     flashes = sorted(download_flashes(args.hours, bbox))
+    t0 = int(flashes[0][0]) if flashes else int(dt.datetime.now(dt.timezone.utc).timestamp())
     payload = {
         "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source": "EUMETSAT MTG LI L2 Lightning Flashes",
         "bbox": list(bbox),
-        "flashes": flashes,
+        "t0": t0,
+        "flashes": [[int(round(t - t0)), lat, lon] for t, lat, lon in flashes],
     }
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(payload, f, separators=(",", ":"))
