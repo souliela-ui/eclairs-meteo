@@ -1,0 +1,4 @@
+eumdac>=3.0
+xarray>=2024.1
+netCDF4>=1.6
+numpy>=1.26
