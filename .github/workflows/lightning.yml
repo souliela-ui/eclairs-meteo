@@ -2,7 +2,7 @@ name: Éclairs MTG
 
 on:
   schedule:
-    - cron: "*/120 * * * *"   # toutes les 10 minutes (GitHub peut décaler de quelques minutes)
+    - cron: "*/120 * * * *"   # toutes les 120 minutes (GitHub peut décaler de quelques minutes)
   workflow_dispatch:           # lancement manuel depuis l'onglet Actions
 
 permissions:
